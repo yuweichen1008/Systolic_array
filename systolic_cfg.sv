@@ -5,6 +5,7 @@ class systolic_cfg extends uvm_object;
   // Configuration parameters
   int data_width;
   int array_size;
+  bit finish_simulation;
   uvm_event start_simulation;
 
   function new(string name = "systolic_cfg");
@@ -12,6 +13,7 @@ class systolic_cfg extends uvm_object;
     // Set default configuration values
     data_width = 8;
     array_size = 4;
+    finish_simulation = 0;
   endfunction
   
 endclass : systolic_cfg

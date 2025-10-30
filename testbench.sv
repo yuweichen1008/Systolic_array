@@ -16,14 +16,19 @@ module testbench;
 
     bit sr_clk;
     bit rst_n;
-    bit [7:0] M_minus_one;
-
 
     // Instantiate the actual interface (not virtual) and connect clock/reset
     systolic_if#(.DIN_WIDTH(8), .N(4)) sif (
         .clk(sr_clk),
         .rst_n(rst_n)
     );
+    initial begin
+        sif.in_valid = 0;
+        foreach(sif.a[i]) begin
+            sif.a[i] = 0;
+            sif.b[i] = 0;
+        end
+    end
 
     systolic_array #(.DIN_WIDTH(8), .N(4)) dut (
         .clk(sr_clk),
@@ -67,8 +72,6 @@ module testbench;
     initial begin
         $dumpvars(0, testbench);
         $dumpfile("dump.vcd");
-        #5000ns; // adjust time as needed
-        $finish;
     end
 
 endmodule

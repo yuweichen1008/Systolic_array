@@ -34,6 +34,7 @@ class first_test extends uvm_test;
 
         // Wait for some time to observe DUT behavior
         #1000ns;
+        env.cfg.finish_simulation = 1;
         phase.drop_objection(this);
         `uvm_info("FIRST_TEST", "First test completed", UVM_LOW);
     endtask

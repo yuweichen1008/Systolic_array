@@ -26,12 +26,10 @@ class systolic_driver #(parameter int DIN_WIDTH = 8, parameter int N = 4) extend
         systolic_seq_item#(DIN_WIDTH, N) req; // non-parameterized type
         int counter;
 
-        phase.raise_objection(this);
-        
         cfg.start_simulation.wait_trigger(); // wait for signal to start sequences
         `uvm_info("SYSTOLIC_DRIVER", "Starting driver run_phase", UVM_LOW);
 
-        forever begin
+        while(!cfg.finish_simulation) begin
             // get next sequence item from sequencer
             seq_item_port.get_next_item(req);
             `uvm_info("SYSTOLIC_DRIVER", "Driving new seq_item to DUT", UVM_LOW);
@@ -59,7 +57,7 @@ class systolic_driver #(parameter int DIN_WIDTH = 8, parameter int N = 4) extend
 
             // wait until output is valid
             counter = 0;
-            while(vif.out_valid !== 1) begin
+            while(!cfg.finish_simulation && vif.out_valid !== 1) begin
                 @(posedge vif.clk);
                 counter++;
                 if (counter > 1000) begin
@@ -72,7 +70,6 @@ class systolic_driver #(parameter int DIN_WIDTH = 8, parameter int N = 4) extend
         end
 
         `uvm_info("SYSTOLIC_DRIVER", "Ending driver run_phase", UVM_LOW);
-        phase.drop_objection(this);
     endtask
 endclass
 

@@ -5,18 +5,19 @@ class coverage_item#(parameter int DIN_WIDTH = 8) extends uvm_object;
 
   rand bit [DIN_WIDTH-1:0] a;
   rand bit [DIN_WIDTH-1:0] b;
+  localparam int MAX_VALUE = 2**DIN_WIDTH - 1;
 
   function new(string name = "coverage_item");
     super.new(name);
+    cg = new();
   endfunction
 
-  // Coverage model
   covergroup cg;
     coverpoint a {
-      bins a_bins[] = {[2**DIN_WIDTH-1:0]}; // e.g., [0:255] for DIN_WIDTH=8
+      bins a_bins[] = {[0:MAX_VALUE]};
     }
     coverpoint b {
-      bins b_bins[] = {[2**DIN_WIDTH-1:0]}; // e.g., [0:255] for DIN_WIDTH=8
+      bins b_bins[] = {[0:MAX_VALUE]};
     }
     cross a, b;
   endgroup
