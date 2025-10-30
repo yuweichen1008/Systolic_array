@@ -14,12 +14,38 @@ module testbench;
     import uvm_pkg::*;
     import systolic_pkg::*;
 
-    systolic_array #(.DIN_WIDTH(8), .N(4)) dut ();
-    sub_systolic_array #(.DIN_WIDTH(8), .N(4), .BUS_WIDTH(64)) sub_dut ();
     logic sr_clk;
     logic rst_n;
+    logic [7:0] M_minus_one;
+
+
     // Instantiate the actual interface (not virtual) and connect clock/reset
-    systolic_if#(.DIN_WIDTH(8), .N(4)) sif (sr_clk, rst_n);
+    systolic_if#(.DIN_WIDTH(8), .N(4)) sif (
+        .clk(sr_clk),
+        .rst_n(rst_n)
+    );
+
+    systolic_array #(.DIN_WIDTH(8), .N(4)) dut (
+        .clk(sr_clk),
+        .rst_n(rst_n),
+        .a_din(sif.a),
+        .b_din(sif.b),
+        .c_out(sif.c_dout),
+        .out_idx(sif.c_dout_idx),
+        .in_valid(sif.in_valid),
+        .out_valid(sif.out_valid)
+    );
+    // sub_systolic_array #(.DIN_WIDTH(8), .N(4), .BUS_WIDTH(64)) sub_dut (
+    //     .clk(sif.clk),
+    //     .rst_n(sif.rst_n),
+    //     .a_din(sif.a),
+    //     .b_din(sif.b),
+    //     .c_dout(sif.c_dout),
+    //     .out_idx(sif.c_dout_idx),
+    //     .in_valid(sif.in_valid),
+    //     .out_valid(sif.out_valid)
+    // );
+
     // systolic array clock
     initial begin
         sr_clk = 0;
@@ -36,8 +62,8 @@ module testbench;
     initial begin
         systolic_cfg cfg;
         cfg = systolic_cfg::type_id::create("cfg");
-        // default cfg.data_width = 8;
-        // default cfg.array_size = 4;
+        cfg.data_width = 8;
+        cfg.array_size = 4;
         uvm_config_db#(systolic_cfg)::set(null, "uvm_test_top.*", "cfg", cfg);
         uvm_config_db#(virtual systolic_if#(8,4))::set(null, "*", "vif", sif);
         run_test("first_test");

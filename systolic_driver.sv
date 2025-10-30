@@ -25,9 +25,9 @@ class systolic_driver #(parameter int DIN_WIDTH = 8, parameter int N = 4) extend
             // get next sequence item from sequencer
             seq_item_port.get_next_item(req);
 
+            @(posedge vif.clk);
             // simple handshake: put data on interface and wait for ready
             for(int i = 0; i < N; i++) begin
-                @(posedge vif.clk);
                 vif.a[i] <= req.a[i];
                 vif.b[i] <= req.b[i];
                 vif.in_valid <= 1;

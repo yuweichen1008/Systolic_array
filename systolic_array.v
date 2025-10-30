@@ -1,154 +1,143 @@
+// systolic_array.v
 module systolic_array #(
-    parameter DIN_WIDTH = 8,
-    parameter N = 4
-) (
-    input logic rst_n, //active low reset
-    input logic clk, //clock
-    input logic [2*DIN_WIDTH-1:0] c_din[0:N-1], // The partial_sum input data of first row PEs. On top level, it can be connected to c_dout of last row PEs systolic_array
-    // With appropriate control logic for the loop back and propagate in each PEs of Systolic array. The Design can support
-    // the matrix multiplications for NxM and MxN matrix, This signal need be reset to be 0 when start the new matrix data
-    input logic [DIN_WIDTH-1:0] a_din[0:N-1], // N elements data of A matrix （column number）, assuming each element is DIN_WIDTH bits Signed data
-    input logic [DIN_WIDTH-1:0] b_din[0:N-1], // N elements data of B matrix（row number）, assuming each element is DIN_WIDTH bits Signed data
-    input logic in_valid, // Toggle to be high to indicates last elements data of A matrix and B matrix are ready (each M clock cycle
-    // depend on the M of input matrix)
-    output logic [2*DIN_WIDTH-1:0] c_dout[N-1:0], // N (number of column of PEs mesh) Elements data of output C matrix, each element is 2*DIN_WIDTH bits
-    // Signed data, Default output is zero when data are not ready
-    output logic out_valid // Toggle to be high to indicates last elements data of C matrix output data are ready (each M clock cycle
-    // depend on the M of input matrix)
+    parameter int DIN_WIDTH = 8,
+    parameter int N = 4
+)(
+    input  logic                          clk,
+    input  logic                          rst_n,    // active low
+    input  logic signed [DIN_WIDTH-1:0]   a_din [N], // A input stream (N elements at once)
+    input  logic signed [DIN_WIDTH-1:0]   b_din [N], // B input stream (N elements at once)
+    input  logic                          in_valid,  // pulse each injection cycle
+    output logic signed [2*DIN_WIDTH-1:0] c_out,     // output matrix value (serialized)
+    output logic                          out_valid, // stream valid
+    output logic [$clog2(N)-1:0]          out_idx    // row index for c_out multiplexing
 );
 
-    // Internal signals for PE array
-    logic [DIN_WIDTH-1:0] a_data[0:N-1][0:N-1]; // A matrix data flowing down
-    logic [DIN_WIDTH-1:0] b_data[0:N-1][0:N-1]; // B matrix data flowing right
-    logic [2*DIN_WIDTH-1:0] c_data[0:N-1][0:N-1]; // C matrix data (partial sums)
-    
-    // Control signals
-    logic [N-1:0] pe_valid[0:N-1]; // Valid signals for each PE
-    logic [N-1:0] pe_out_valid[0:N-1]; // Output valid signals for each PE
-    
-    // Counter for tracking computation cycles
-    logic [7:0] cycle_count;
-    logic [7:0] matrix_count;
-    logic computation_active;
-    
-    // Initialize outputs
-    always_comb begin
-        for (int i = 0; i < N; i++) begin
-            c_dout[i] = c_data[N-1][i];
-        end
-        out_valid = pe_out_valid[N-1][N-1];
-    end
-    
-    // Control logic for consecutive matrix multiplications
-    always_ff @(posedge clk or negedge rst_n) begin
-        if (!rst_n) begin
-            cycle_count <= 0;
-            matrix_count <= 0;
-            computation_active <= 0;
-        end else begin
-            if (in_valid) begin
-                computation_active <= 1;
-                cycle_count <= 0;
-                matrix_count <= matrix_count + 1;
-            end else if (computation_active) begin
-                cycle_count <= cycle_count + 1;
-                // Reset for next matrix after M cycles (assuming M=2 for 2x2 example)
-                if (cycle_count == 1) begin // M-1 cycles for computation
-                    computation_active <= 0;
-                end
-            end
-        end
-    end
-    
-    // Generate NxN PE array
+    // Internal data busses: all arrays are [row][col], zero-based from [0][0]
+    logic signed [DIN_WIDTH-1:0]   a_wire [N][N];
+    logic signed [DIN_WIDTH-1:0]   b_wire [N][N];
+    logic signed [2*DIN_WIDTH-1:0] c_wire [N][N];
+
     genvar i, j;
     generate
-        for (i = 0; i < N; i++) begin : gen_row
-            for (j = 0; j < N; j++) begin : gen_col
-                // Processing Element (PE) instantiation
-                pe_unit #(
-                    .DIN_WIDTH(DIN_WIDTH)
-                ) pe_inst (
-                    .clk(clk),
-                    .rst_n(rst_n),
-                    .a_in(i == 0 ? a_din[j] : a_data[i-1][j]),
-                    .b_in(j == 0 ? b_din[i] : b_data[i][j-1]),
-                    .c_in(i == 0 ? c_din[j] : c_data[i-1][j]),
-                    .a_out(a_data[i][j]),
-                    .b_out(b_data[i][j]),
-                    .c_out(c_data[i][j]),
-                    .valid_in(i == 0 && j == 0 ? in_valid : 
-                             i == 0 ? pe_valid[i][j-1] : 
-                             j == 0 ? pe_valid[i-1][j] : 
-                             pe_valid[i-1][j] && pe_valid[i][j-1]),
-                    .valid_out(pe_valid[i][j]),
-                    .out_valid(pe_out_valid[i][j])
+        for (i = 0; i < N; i++) begin : ROWS
+            for (j = 0; j < N; j++) begin : COLS
+                // Local wires for input to this PE
+                logic signed [DIN_WIDTH-1:0] a_in, b_in;
+                logic signed [2*DIN_WIDTH-1:0] c_in;
+
+                // Multiplex: leftmost column gets external a_din, else shift from left
+                assign a_in = (j == 0) ? a_din[i]    : a_wire[i][j-1];
+                // Top row gets external b_din, else downward shift from above
+                assign b_in = (i == 0) ? b_din[j]    : b_wire[i-1][j];
+                // First column col 0 gets zero partial sum; rest shift c from left
+                assign c_in = (j == 0) ? '0          : c_wire[i][j-1];
+
+                pe #(.DW(DIN_WIDTH)) u_pe (
+                    .clk    (clk),
+                    .rst_n  (rst_n),
+                    .a_in   (a_in),
+                    .b_in   (b_in),
+                    .c_in   (c_in),
+                    .a_out  (a_wire[i][j]),      // right, for next col
+                    .b_out  (b_wire[i][j]),      // down,  for next row
+                    .c_out  (c_wire[i][j])       // right, for next col
                 );
             end
         end
     endgenerate
 
-endmodule
+    // Output serialization: return c_wire[row][N-1] for row=0..N-1 over N cycles
+    // Standard state machine for streaming output after latency
+    typedef enum logic [1:0] {IDLE, INJECT, WAIT_LAT, OUTPUT} state_t;
+    state_t state, next_state;
 
-// Processing Element (PE) module
-module pe_unit #(
-    parameter DIN_WIDTH = 8
-) (
-    input logic clk,
-    input logic rst_n,
-    input logic [DIN_WIDTH-1:0] a_in,
-    input logic [DIN_WIDTH-1:0] b_in,
-    input logic [2*DIN_WIDTH-1:0] c_in,
-    output logic [DIN_WIDTH-1:0] a_out,
-    output logic [DIN_WIDTH-1:0] b_out,
-    output logic [2*DIN_WIDTH-1:0] c_out,
-    input logic valid_in,
-    output logic valid_out,
-    output logic out_valid
-);
+    logic [$clog2(N)-1:0] out_counter;    // output row index
+    int injected_count;                   // input injection count
+    int latency_cnt;                      // latency counter
 
-    // Internal registers
-    logic [DIN_WIDTH-1:0] a_reg;
-    logic [DIN_WIDTH-1:0] b_reg;
-    logic [2*DIN_WIDTH-1:0] c_reg;
-    logic valid_reg;
-    logic out_valid_reg;
-    
-    // PE computation: c_out = c_in + a_in * b_in
-    logic [2*DIN_WIDTH-1:0] mult_result;
-    logic [2*DIN_WIDTH-1:0] add_result;
-    
-    // Signed multiplication
-    assign mult_result = $signed(a_in) * $signed(b_in);
-    assign add_result = $signed(c_in) + $signed(mult_result);
-    
-    // Sequential logic
+    // Synchronous state machine and output logic
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
-            a_reg <= 0;
-            b_reg <= 0;
-            c_reg <= 0;
-            valid_reg <= 0;
-            out_valid_reg <= 0;
+            state            <= IDLE;
+            injected_count   <= 0;
+            latency_cnt      <= 0;
+            out_counter      <= 0;
+            out_valid        <= 0;
+            c_out            <= '0;
+            out_idx          <= '0;
         end else begin
-            if (valid_in) begin
-                a_reg <= a_in;
-                b_reg <= b_in;
-                c_reg <= add_result;
-                valid_reg <= 1;
-                out_valid_reg <= 1;
-            end else begin
-                valid_reg <= 0;
-                out_valid_reg <= 0;
-            end
+            state <= next_state;
+            case (state)
+                IDLE: begin
+                    out_valid      <= 0;
+                    if (in_valid)  injected_count <= 1;
+                    else           injected_count <= 0;
+                    latency_cnt    <= 0;
+                    out_counter    <= 0;
+                end
+                INJECT: begin
+                    if (in_valid && (injected_count < N))
+                        injected_count <= injected_count + 1;
+                end
+                WAIT_LAT: begin
+                    latency_cnt    <= latency_cnt + 1;
+                    out_valid      <= 0;
+                end
+                OUTPUT: begin
+                    out_valid      <= 1;
+                    c_out          <= c_wire[out_counter][N-1];
+                    out_idx        <= out_counter;
+                    if (out_counter == N-1)
+                        out_counter <= 0;
+                    else
+                        out_counter <= out_counter + 1;
+                end
+            endcase
         end
     end
-    
-    // Output assignments
-    assign a_out = a_reg;
-    assign b_out = b_reg;
-    assign c_out = c_reg;
-    assign valid_out = valid_reg;
-    assign out_valid = out_valid_reg;
 
+    // Next state logic
+    always_comb begin
+        next_state = state;
+        case (state)
+            IDLE:    if (in_valid) next_state = INJECT;
+            INJECT:  if ((injected_count + (in_valid ? 1 : 0)) >= N) next_state = WAIT_LAT;
+                     else if (!in_valid) next_state = IDLE;
+            WAIT_LAT:if (latency_cnt + 1 >= N) next_state = OUTPUT;
+            OUTPUT:  if (out_counter + 1 >= N) next_state = IDLE;
+        endcase
+    end
+
+endmodule
+
+// Processing Element (PE)
+module pe #(
+    parameter int DW = 8
+) (
+    input  logic                        clk,
+    input  logic                        rst_n,
+    input  logic signed [DW-1:0]        a_in,
+    input  logic signed [DW-1:0]        b_in,
+    input  logic signed [2*DW-1:0]      c_in,
+    output logic signed [DW-1:0]        a_out,
+    output logic signed [DW-1:0]        b_out,
+    output logic signed [2*DW-1:0]      c_out
+);
+    logic signed [DW-1:0] a_r, b_r;
+    logic signed [2*DW-1:0] c_r;
+    always_ff @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            a_r <= '0;
+            b_r <= '0;
+            c_r <= '0;
+        end else begin
+            c_r <= c_in + a_r * b_r;
+            a_r <= a_in;
+            b_r <= b_in;
+        end
+    end
+    assign a_out = a_r;
+    assign b_out = b_r;
+    assign c_out = c_r;
 endmodule
