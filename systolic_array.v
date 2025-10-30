@@ -3,8 +3,8 @@ module systolic_array #(
     parameter int DIN_WIDTH = 8,
     parameter int N = 4
 )(
-    input  logic                          clk,
-    input  logic                          rst_n,    // active low
+    input  bit clk,
+    input  bit                          rst_n,    // active low
     input  logic signed [DIN_WIDTH-1:0]   a_din [N], // A input stream (N elements at once)
     input  logic signed [DIN_WIDTH-1:0]   b_din [N], // B input stream (N elements at once)
     input  logic                          in_valid,  // pulse each injection cycle

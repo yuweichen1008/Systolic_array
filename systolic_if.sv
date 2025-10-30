@@ -4,8 +4,8 @@ interface systolic_if #(
     parameter int DIN_WIDTH = 8,
     parameter int N = 4
 )(
-    input logic clk,
-    input logic rst_n
+    input bit clk,
+    input bit rst_n
 );
     logic signed [DIN_WIDTH-1:0] a[0:N-1];
     logic signed [DIN_WIDTH-1:0] b[0:N-1];

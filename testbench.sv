@@ -14,9 +14,9 @@ module testbench;
     import uvm_pkg::*;
     import systolic_pkg::*;
 
-    logic sr_clk;
-    logic rst_n;
-    logic [7:0] M_minus_one;
+    bit sr_clk;
+    bit rst_n;
+    bit [7:0] M_minus_one;
 
 
     // Instantiate the actual interface (not virtual) and connect clock/reset
@@ -60,11 +60,6 @@ module testbench;
     end
 
     initial begin
-        systolic_cfg cfg;
-        cfg = systolic_cfg::type_id::create("cfg");
-        cfg.data_width = 8;
-        cfg.array_size = 4;
-        uvm_config_db#(systolic_cfg)::set(null, "uvm_test_top.*", "cfg", cfg);
         uvm_config_db#(virtual systolic_if#(8,4))::set(null, "*", "vif", sif);
         run_test("first_test");
     end
@@ -72,7 +67,8 @@ module testbench;
     initial begin
         $dumpvars(0, testbench);
         $dumpfile("dump.vcd");
-        // $dumpvars(0, top);
+        #5000ns; // adjust time as needed
+        $finish;
     end
 
 endmodule

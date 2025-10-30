@@ -45,6 +45,7 @@ class systolic_scoreboard#(parameter int DIN_WIDTH = 8, parameter int N = 4) ext
 
   function void write(systolic_seq_item result);
     // Check result before cover
+    `uvm_info("SYSTOLIC_SCOREBOARD", $sformatf("Scoreboard received result: %s", result.convert2string()), UVM_LOW);
 
     // Sample coverage
     for(int i = 0; i < N; i++) begin

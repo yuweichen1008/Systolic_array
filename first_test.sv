@@ -23,6 +23,9 @@ class first_test extends uvm_test;
         systolic_seq_item#(DIN_WIDTH, N) seq_item;
         systolic_sequence #(DIN_WIDTH, N) seq;
 
+        super.run_phase(phase);
+        phase.raise_objection(this);
+
         if (env == null || env.agt == null || env.agt.seqr == null) begin
             `uvm_fatal("SEQ", "Sequencer handle is null!")
         end
@@ -31,7 +34,7 @@ class first_test extends uvm_test;
 
         // Wait for some time to observe DUT behavior
         #1000ns;
-
+        phase.drop_objection(this);
         `uvm_info("FIRST_TEST", "First test completed", UVM_LOW);
     endtask
     

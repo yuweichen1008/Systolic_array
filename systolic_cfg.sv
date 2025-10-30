@@ -5,6 +5,7 @@ class systolic_cfg extends uvm_object;
   // Configuration parameters
   int data_width;
   int array_size;
+  uvm_event start_simulation;
 
   function new(string name = "systolic_cfg");
     super.new(name);

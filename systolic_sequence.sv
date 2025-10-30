@@ -16,11 +16,7 @@ class systolic_sequence#(parameter int DIN_WIDTH = 8, parameter int N = 4) exten
         start_item(req);
         // randomize fields
         if(req.randomize()) begin
-            string a_str, b_str;
-            foreach (req.a[i]) a_str = {a_str, $sformatf("%0d ", req.a[i])};
-            foreach (req.b[i]) b_str = {b_str, $sformatf("%0d ", req.b[i])};
-            $sformatf("Generated seq_item: a=%s, b=%s", a_str, b_str);
-            // `uvm_info("SYSTOLIC_SEQ", $sformatf("Generated seq_item: a=%0d, b=%0d", req.a, req.b), UVM_LOW)
+            `uvm_info("SYSTOLIC_SEQ", $sformatf("Generated seq_item: %s", req.convert2string()), UVM_LOW);
         end else begin
             `uvm_error("SYSTOLIC_SEQ", "Failed to randomize seq_item")
         end

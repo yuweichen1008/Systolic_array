@@ -13,5 +13,16 @@ class systolic_seq_item#(parameter int DIN_WIDTH = 8, parameter int N=4) extends
         foreach (a[i]) a[i] = '0;
         foreach (b[i]) b[i] = '0;
     endfunction
+
+    function string convert2string();
+        string str;
+        str = $sformatf("systolic_seq_item: a=[");
+        foreach (a[i]) str = {str, $sformatf("%0d ", a[i])};
+        str = {str, "] b=["};
+        foreach (b[i]) str = {str, $sformatf("%0d ", b[i])};
+        str = {str, "]"};
+        return str;
+    endfunction
+    
 endclass
 `endif
