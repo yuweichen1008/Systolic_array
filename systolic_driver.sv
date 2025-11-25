@@ -34,19 +34,10 @@ class systolic_driver #(parameter int DIN_WIDTH = 8, parameter int N = 4) extend
             seq_item_port.get_next_item(req);
             `uvm_info("SYSTOLIC_DRIVER", "Driving new seq_item to DUT", UVM_LOW);
 
-            // TODO add some delay or handshake mechanism if needed
-            // drive inputs to DUT
-            @(posedge vif.clk);
-            vif.in_valid <= 1;
-            `uvm_info("SYSTOLIC_DRIVER", "Set valid", UVM_LOW);
+            // pipeline data into DUT
+            pipeline_data(req);
 
-            // simple handshake: put data on interface and wait for ready
-            for(int i = 0; i < N; i++) begin
-                vif.a[i] <= req.a[i];
-                vif.b[i] <= req.b[i];
-            end
-
-            // deassert in_valid on next cycle
+            // deassert in_valid and reset data on next cycle
             @(posedge vif.clk);
             vif.in_valid <= 0;
             for(int i = 0; i < N; i++) begin
@@ -70,6 +61,43 @@ class systolic_driver #(parameter int DIN_WIDTH = 8, parameter int N = 4) extend
         end
 
         `uvm_info("SYSTOLIC_DRIVER", "Ending driver run_phase", UVM_LOW);
+    endtask
+
+    task pipeline_data(systolic_seq_item#(DIN_WIDTH, N) req);
+        bit[DIN_WIDTH-1:0] a_pipe [2*N][N/2]; // 2*N depth for systolic array
+        bit[DIN_WIDTH-1:0] b_pipe [2*N][N/2]; // 2*N depth for systolic array
+
+        // Create perfect matrix without deferred inputs
+        for(int cycle = 0; cycle < N; cycle++) begin
+            for(int i = 0; i < N/2; i++) begin
+                a_pipe[cycle][i] = req.a[cycle*N/2 + i];
+                b_pipe[cycle][i] = req.b[cycle*N/2 + i];
+            end
+        end
+        // Diagonal shift: collect elements along shifted_cycle for all possible cycles
+        for(int cycle = 0; cycle < 2*N-1; cycle++) begin
+            for(int i = 0; i < N/2; i++) begin
+                int shifted_cycle = cycle - i;
+                if(shifted_cycle >= 0 && shifted_cycle < N) begin
+                    a_pipe[cycle][i] = a_pipe[shifted_cycle][i];
+                    b_pipe[cycle][i] = b_pipe[shifted_cycle][i];
+                end else begin
+                    a_pipe[cycle][i] = '0;
+                    b_pipe[cycle][i] = '0;
+                end
+            end
+        end
+        // Introduce one cycle delay to simulate pipeline behavior
+        vif.in_valid <= 1;
+        for(int cycle = 0; cycle < 2*N-1; cycle++) begin
+            // Apply inputs to DUT
+            for(int i = 0; i < N/2; i++) begin
+                vif.a[i] <= a_pipe[cycle][i];
+                vif.b[i] <= b_pipe[cycle][i];
+            end
+            @(posedge vif.clk);
+        end
+        `uvm_info("SYSTOLIC_DRIVER", "Set valid and applied inputs to DUT", UVM_LOW);
     endtask
 endclass
 

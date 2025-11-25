@@ -22,6 +22,18 @@ class coverage_item#(parameter int DIN_WIDTH = 8) extends uvm_object;
     cross a, b;
   endgroup
 
+  // coverage for toggle
+  covergroup cg_toggle;
+    option.per_instance = 1;
+    coverpoint a {
+      bins a_bins[] = {[0:MAX_VALUE]};
+    }
+    coverpoint b {
+      bins b_bins[] = {[0:MAX_VALUE]};
+    }
+    cross a, b;
+  endgroup
+
   function void sample();
     cg.sample();
   endfunction

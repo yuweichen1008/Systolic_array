@@ -69,12 +69,12 @@ class systolic_monitor #(parameter int DIN_WIDTH = 8, parameter int N = 4) exten
             while(!cfg.finish_simulation && vif.out_valid === 1) begin
                 for(int i = 0; i < N; i++) begin
                     @(posedge vif.clk);
-                    // if (vif.c_dout[i] !== expected_result[i]) begin
-                    //     `uvm_error("SYSTOLIC_MONITOR", $sformatf("Mismatch: expected %0d, got %0d", expected_result[i], vif.c_dout[i]))
-                    // end
-                    // if (vif.c_dout_idx != i) begin
-                    //     `uvm_error("SYSTOLIC_MONITOR", $sformatf("Output index mismatch: expected %0d, got %0d", i, vif.c_dout_idx))
-                    // end
+                    if (vif.c_dout[i] !== expected_result[i]) begin
+                        `uvm_warning("SYSTOLIC_MONITOR", $sformatf("Mismatch: expected %0d, got %0d", expected_result[i], vif.c_dout[i]))
+                    end
+                    if (vif.c_dout_idx != i) begin
+                        `uvm_warning("SYSTOLIC_MONITOR", $sformatf("Output index mismatch: expected %0d, got %0d", i, vif.c_dout_idx))
+                    end
                 end
             end
 

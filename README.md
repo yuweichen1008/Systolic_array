@@ -30,5 +30,6 @@ please refer to systolic_pkt.sv
 
 
 # Revision
-| 0.1  | Initial push, add systolic uvm to repo     |
-| 0.2  | Connect systolic_array dut with testbench  |
+| 0.1  | Initial push, add systolic uvm to repo     |       
+| 0.2  | Connect systolic_array dut with testbench  |       
+| 0.3  | Remove checker for no DUT                  |       
