@@ -1,107 +1,82 @@
 `ifndef SYSTOLIC_MONITOR_SV
 `define SYSTOLIC_MONITOR_SV
-class systolic_monitor #(parameter int DIN_WIDTH = 8, parameter int N = 4) extends uvm_monitor;
-    typedef virtual systolic_if#(DIN_WIDTH, N) systolic_vif_t;
 
-    systolic_cfg cfg;
-    uvm_analysis_export#(systolic_seq_item#(DIN_WIDTH, N)) analysis_port;
-    systolic_vif_t vif;
+class systolic_monitor #(
+    parameter int DIN_WIDTH = 8, 
+    parameter int N = 4
+) extends uvm_monitor;
+
     `uvm_component_param_utils(systolic_monitor#(DIN_WIDTH, N))
+
+    // Virtual Interface handle
+    typedef virtual systolic_if #(DIN_WIDTH, N) systolic_vif_t;
+    systolic_vif_t vif;
+
+    // Analysis Port to send transactions to the Scoreboard 
+    uvm_analysis_port #(systolic_seq_item#(DIN_WIDTH, N)) item_collected_port;
 
     function new(string name, uvm_component parent);
         super.new(name, parent);
-        analysis_port = new("analysis_port", this);
+        item_collected_port = new("item_collected_port", this);
     endfunction
 
     virtual function void build_phase(uvm_phase phase);
         super.build_phase(phase);
         if (!uvm_config_db#(systolic_vif_t)::get(this, "", "vif", vif)) begin
-            `uvm_fatal("NOVIF", "Virtual interface 'vif' not found in config_db")
-        end
-        if(!uvm_config_db#(systolic_cfg)::get(this, "", "cfg", cfg)) begin
-            `uvm_fatal("NOCFG", "systolic_cfg not found in config_db for systolic_monitor")
+            `uvm_fatal("MON_NOCFG", "Virtual interface 'vif' not found in config_db")
         end
     endfunction
 
-    task run_phase(uvm_phase phase);
-        systolic_seq_item#(DIN_WIDTH, N) req; // non-parameterized type
-        bit[DIN_WIDTH-1:0] a [0:N-1];
-        bit[DIN_WIDTH-1:0] b [0:N-1];
-        bit[2*DIN_WIDTH-1:0] expected_result[0:N-1];
-        int counter;
-
-        phase.raise_objection(this);
-
-        cfg.start_simulation.wait_trigger(); // wait for signal to start sequences
-        `uvm_info("SYSTOLIC_MONITOR", "Starting monitor run_phase", UVM_LOW);
-
-
-        while(!cfg.finish_simulation) begin
-            
-            // wait for valid signal
-            while(!cfg.finish_simulation && vif.in_valid !== 1) begin
-                @(posedge vif.clk);
-            end
-
-            // matrix multiplication input capture for single cycle
-            for(int i = 0; i < N; i++) begin
-                a[i] = vif.a[i];
-                b[i] = vif.b[i];
-                `uvm_info("SYSTOLIC_MONITOR", $sformatf("in_valid asserted, capturing inputs [%0d]: %0d, %0d", i, a[i], b[i]), UVM_LOW);
-            end
-
-
-            // matrix multiplication calculation and expected result generation
-            matrix_multiplication_calculation(a, b, expected_result);
-
-            // matrix multiplication result capture
-            counter = 0;
-            while(!cfg.finish_simulation && vif.out_valid !== 1) begin
-                @(posedge vif.clk);
-                counter++;
-                if (counter > 1000) begin
-                    `uvm_fatal("SYSTOLIC_MONITOR", "Timeout waiting for out_valid")
-                end
-            end
-            `uvm_info("SYSTOLIC_MONITOR", "out_valid asserted, capturing outputs", UVM_LOW);
-
-            // check received output against expected result
-            while(!cfg.finish_simulation && vif.out_valid === 1) begin
-                for(int i = 0; i < N; i++) begin
-                    @(posedge vif.clk);
-                    if (vif.c_dout[i] !== expected_result[i]) begin
-                        `uvm_warning("SYSTOLIC_MONITOR", $sformatf("Mismatch: expected %0d, got %0d", expected_result[i], vif.c_dout[i]))
-                    end
-                    if (vif.c_dout_idx != i) begin
-                        `uvm_warning("SYSTOLIC_MONITOR", $sformatf("Output index mismatch: expected %0d, got %0d", i, vif.c_dout_idx))
-                    end
-                end
-            end
-
-            // Create and send seq_item to scoreboard
-            req = systolic_seq_item#(DIN_WIDTH, N)::type_id::create("req");
-            for(int i = 0; i < N; i++) begin
-                req.a[i] = a[i];
-                req.b[i] = b[i];
-            end
-            analysis_port.write(req); // to scoreboard
-        end
-
-        `uvm_info("SYSTOLIC_MONITOR", "Ending monitor run_phase", UVM_LOW);
-        phase.drop_objection(this);
+    virtual task run_phase(uvm_phase phase);
+        // Concurrently monitor inputs and outputs
+        fork
+            monitor_inputs();
+            monitor_outputs();
+        join
     endtask
 
-    task automatic matrix_multiplication_calculation (
-        input  bit [DIN_WIDTH-1:0]        a [0:N-1],
-        input  bit [DIN_WIDTH-1:0]        b [0:N-1],
-        output bit [2*DIN_WIDTH-1:0] expected_res [0:N-1]
-    );
-        for (int i = 0; i < N; i++) begin
-            // element-wise signed multiplication (adjust if a different relation is desired)
-            expected_res[i] = $signed(a[i]) * $signed(b[i]);
-            `uvm_info("SYSTOLIC_MONITOR", $sformatf("Expected result for entry[%0d]: %0d", i, expected_res[i]), UVM_LOW);
+    // Task to capture A and B matrix inputs
+    protected task monitor_inputs();
+        forever begin
+            @(posedge vif.clk);
+            if (vif.rst_n && vif.in_valid) begin
+                systolic_seq_item#(DIN_WIDTH, N) tr;
+                tr = systolic_seq_item#(DIN_WIDTH, N)::type_id::create("in_tr");
+                
+                tr.is_input = 1;
+                tr.is_output = 0;
+                for (int i = 0; i < N; i++) begin
+                    tr.a[i] = vif.a[i];
+                    tr.b[i] = vif.b[i];
+                end
+                
+                `uvm_info("MON_INPUT", $sformatf("Captured Input: %s", tr.convert2string()), UVM_HIGH)
+                item_collected_port.write(tr);
+            end
         end
     endtask
 
-endclass : systolic_monitor
+    // Task to capture C matrix results
+    protected task monitor_outputs();
+        forever begin
+            @(posedge vif.clk);
+            if (vif.rst_n && vif.out_valid) begin
+                systolic_seq_item#(DIN_WIDTH, N) tr;
+                tr = systolic_seq_item#(DIN_WIDTH, N)::type_id::create("out_tr");
+                
+                tr.is_input = 0;
+                tr.is_output = 1;
+                tr.out_valid = 1;
+                for (int i = 0; i < N; i++) begin
+                    tr.c_dout[i] = vif.c_dout[i];
+                end
+                
+                `uvm_info("MON_OUTPUT", $sformatf("Captured Output Result: %p", tr.c_dout), UVM_MEDIUM)
+                item_collected_port.write(tr);
+            end
+        end
+    endtask
+
+endclass
+
 `endif

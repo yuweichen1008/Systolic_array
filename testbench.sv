@@ -1,7 +1,11 @@
-/*******************************************
-This is a basic UVM systolic testbench.
-*********************************************/
+/******************************************************************************
+* File: testbench.sv
+* Developed by: Yu-Wei Chen 
+* Description: Top-level testbench for UVM verification of the Systolic Array.
+* Connects the signed interface to the parallel-output DUT.
+*******************************************************************************/
 
+`timescale 1ns/1ps
 `include "uvm_macros.svh"
 `include "systolic_if.sv"
 `include "systolic_pkg.sv"
@@ -14,67 +18,73 @@ module testbench;
     import uvm_pkg::*;
     import systolic_pkg::*;
 
-    bit sr_clk;
+    // Simulation Clock and Reset
+    bit clk;
     bit rst_n;
 
-    // Instantiate the actual interface (not virtual) and connect clock/reset
-    systolic_if#(.DIN_WIDTH(8), .N(4)) sif (
-        .clk(sr_clk),
-        .rst_n(rst_n)
+    // Local wires for the top-level partial sum input (D in C = A*B + D)
+    // For basic matrix multiplication, this is tied to 0.
+    logic signed [2*8-1:0] top_c_din [0:3];
+
+    // 1. Instantiate the Physical Interface
+    // Parameters match DIN_WIDTH=8, N=4
+    systolic_if #(.DIN_WIDTH(8), .N(4)) sif (.clk(clk));
+
+    // 2. Connect Interface Reset
+    assign sif.rst_n = rst_n;
+
+    // 3. Instantiate the Design Under Test (DUT)
+    // Mapping to the revised parallel systolic_array.v
+    systolic_array #(
+        .DIN_WIDTH(8), 
+        .N(4)
+    ) dut (
+        .clk       (clk),
+        .rst_n     (rst_n),
+        .c_din     (top_c_din),   // Tied to 0 for initial verification
+        .a_din     (sif.a),       // Skewed Row inputs from Driver
+        .b_din     (sif.b),       // Skewed Column/Weight inputs from Driver
+        .in_valid  (sif.in_valid),
+        .c_dout    (sif.c_dout),  // Parallel result output
+        .out_valid (sif.out_valid)
     );
+
+    // 4. Clock Generation
     initial begin
-        sif.in_valid = 0;
-        foreach(sif.a[i]) begin
-            sif.a[i] = 0;
-            sif.b[i] = 0;
-        end
+        clk = 0;
+        forever #5 clk = ~clk; // 100MHz clock
     end
 
-    systolic_array #(.DIN_WIDTH(8), .N(4)) dut (
-        .clk(sr_clk),
-        .rst_n(rst_n),
-        .a_din(sif.a),
-        .b_din(sif.b),
-        .c_out(sif.c_dout),
-        .out_idx(sif.c_dout_idx),
-        .in_valid(sif.in_valid),
-        .out_valid(sif.out_valid)
-    );
-    // sub_systolic_array #(.DIN_WIDTH(8), .N(4), .BUS_WIDTH(64)) sub_dut (
-    //     .clk(sif.clk),
-    //     .rst_n(sif.rst_n),
-    //     .a_din(sif.a),
-    //     .b_din(sif.b),
-    //     .c_dout(sif.c_dout),
-    //     .out_idx(sif.c_dout_idx),
-    //     .in_valid(sif.in_valid),
-    //     .out_valid(sif.out_valid)
-    // );
-
-    // systolic array clock
-    initial begin
-        sr_clk = 0;
-        forever begin
-            #10 sr_clk = ~sr_clk;
-        end
-    end
-    // reset
+    // 5. Reset Generation
     initial begin
         rst_n = 0;
         #100 rst_n = 1;
     end
 
+    // 6. Testbench Initialization
     initial begin
+        // Initialize partial sum input to zero
+        for (int i = 0; i < 4; i++) begin
+            top_c_din[i] = '0;
+        end
+
+        // Set the virtual interface in the UVM Configuration Database
+        // Note: The path "*" allows all UVM components to access this VIF
         uvm_config_db#(virtual systolic_if#(8,4))::set(null, "*", "vif", sif);
+        
+        // Start the UVM Test
         run_test("first_test");
     end
-    // Dump waves
+
+    // 7. Waveform Dumping
     initial begin
+        $dumpfile("systolic_sim.vcd");
         $dumpvars(0, testbench);
-        $dumpfile("dump.vcd");
+        
+        // Safety timeout to prevent infinite simulation
+        #100000;
+        `uvm_fatal("TIMEOUT", "Simulation exceeded maximum time limit")
+        $finish;
     end
 
 endmodule
-// developed by: Yuwei Chen
-// description: This file contains the UVM testbench module for the systolic array design.
-// description: This package defines common types and parameters for the systolic array design.
