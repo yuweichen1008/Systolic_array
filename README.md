@@ -1,7 +1,3 @@
-This is a professional update for your `README.md` file. It incorporates the architectural changes we made (signed logic, data skewing, and SVA) and adds the requested waveform section.
-
------
-
 # Systolic Array UVM Verification Environment
 
 This repository contains a comprehensive **UVM (Universal Verification Methodology)** testbench designed to verify a high-performance, parameterizable **NxN Systolic Array**. The design is optimized for matrix multiplication ($C = A \times B$) using signed 2's complement arithmetic.
