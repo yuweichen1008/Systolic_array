@@ -51,6 +51,7 @@ The environment components are neatly organized in a package:
 ## 4\. Final Result
 
 The following waveform demonstrates consecutive matrix multiplications. Note the staggered (skewed) input of matrix $A$ and the corresponding parallel output of matrix $C$ once the pipeline is full.
+![result](src/waveform.png)
 
 ## 5\. Revision History
 
