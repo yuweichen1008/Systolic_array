@@ -38,7 +38,7 @@ class systolic_env#(parameter int DIN_WIDTH = 8, parameter int N = 4) extends uv
     super.connect_phase(phase);
     // connect monitor to scoreboard
     if (agt.mon != null) begin
-      agt.mon.analysis_port.connect(sb.analysis_export);
+      agt.mon.item_collected_port.connect(sb.analysis_export);
     end else begin
       `uvm_error("NOMON", "Monitor 'mon' is not instantiated in systolic_agent")
     end

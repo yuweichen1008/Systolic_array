@@ -14,6 +14,13 @@ class systolic_driver #(parameter int DIN_WIDTH = 8, parameter int N = 4) extend
         super.new(name, parent);
     endfunction
 
+    function void build_phase(uvm_phase phase);
+        super.build_phase(phase);
+        if (!uvm_config_db#(systolic_vif_t)::get(this, "", "vif", vif)) begin
+            `uvm_fatal("DRV_NOCFG", "Virtual interface 'vif' not found in config_db")
+        end
+    endfunction
+
     virtual task run_phase(uvm_phase phase);
         // initial state
         vif.in_valid <= 0;
